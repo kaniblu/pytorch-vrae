@@ -7,6 +7,7 @@ import torch
 import numpy as np
 
 import utils
+from model import embedding
 
 
 def add_embed_arguments(parser):
@@ -126,12 +127,12 @@ EMBEDDINGS = [
 ]
 
 
-def _load_embeddings(weight, vocab, we):
+def _load_embeddings(module: embedding.AbstractEmbedding, vocab, we):
     for w, v in we:
         if w not in vocab.f2i:
             continue
         idx = vocab.f2i[w]
-        weight[idx] = torch.FloatTensor(v)
+        module.load(idx, torch.FloatTensor(v))
 
 
 def get_embeddings(args, vocab):
@@ -143,9 +144,11 @@ def get_embeddings(args, vocab):
     }, "embedding type")
 
 
-def load_embeddings(args, vocab, params):
+def load_embeddings(args, vocab, modules):
     if args.embed_type is None:
         return
     embeddings = get_embeddings(args, vocab)
     embeddings.preload()
-    _load_embeddings(params, vocab, embeddings)
+    for module in modules:
+        assert isinstance(module, embedding.AbstractEmbedding)
+        _load_embeddings(module, vocab, embeddings)

@@ -39,11 +39,6 @@ class Linear(nn.Linear):
             self.bias.detach().zero_()
 
 
-class Embedding(nn.Embedding):
-    def reset_parameters(self):
-        init.xavier_normal_(self.weight.detach())
-
-
 class Module(nn.Module):
     name = None
 

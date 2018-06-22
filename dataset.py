@@ -42,12 +42,13 @@ class TextSequenceDataset(td.Dataset):
     }
 
     def __init__(self, path, feats=None, vocab=None, vocab_limit=None,
-                 pad_eos=None, unk="<unk>"):
+                 pad_bos=None, pad_eos=None, unk="<unk>"):
         self.path = path
         self.feats = feats
         self.vocab = vocab
         self.vocab_limit = vocab_limit
         self.pad_eos = pad_eos
+        self.pad_bos = pad_bos
         self.unk = unk
         self.unk_idx = None
         self.data = None
@@ -68,6 +69,9 @@ class TextSequenceDataset(td.Dataset):
             self.data = [line.rstrip().split() for line in f]
             if self.pad_eos is not None:
                 self.data = [sent + [self.pad_eos] for sent in self.data]
+            if self.pad_bos is not None:
+                self.data = [[self.pad_bos] + sent for sent in self.data]
+
         if self.vocab is None:
             self.vocab = utils.Vocabulary()
             utils.populate_vocab(

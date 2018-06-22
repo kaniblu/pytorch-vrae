@@ -28,14 +28,18 @@ class BaseRNNCell(common.Module):
     def forward_cell(self, x, h0):
         raise NotImplementedError()
 
-    def form_hidden(self, x, h0):
-        batch_size, max_len, _ = x.size()
-        if h0 is not None:
-            h = x.new(self.layers, batch_size, self.hidden_dim).zero_()
-            h[0], h0 = h0, h
-        return h0
+    def form_hidden(self, h0):
+        """
+        returns hidden state suitable for priming this cell
+        :param h0: [batch_size, hidden_dim] Tensor, the first hidden input
+        :return:
+        """
+        batch_size = h0.size(0)
+        h = h0.new(self.layers, batch_size, self.hidden_dim).zero_()
+        h[0] = h0
+        return h
 
-    def forward(self, x, lens=None, h0=None):
+    def forward(self, x, lens=None, h=None):
         """
         :param x: [batch_size x seq_len x input_dim] Tensor
         :param lens: [batch_size] LongTensor
@@ -43,14 +47,12 @@ class BaseRNNCell(common.Module):
         :return:
         """
         batch_size, max_len, _ = x.size()
-        if h0 is not None:
-            h0 = self.form_hidden(x, h0)
         if self.dynamic:
             x = R.pack_padded_sequence(x, lens, True)
-        o, h = self.forward_cell(x, h0)
+        o, c, h = self.forward_cell(x, h)
         if self.dynamic:
             o, _ = R.pad_packed_sequence(o, True, 0, max_len)
-        return o.contiguous(), h
+        return o.contiguous(), c, h
 
 
 class LSTMCell(BaseRNNCell):
@@ -71,13 +73,13 @@ class LSTMCell(BaseRNNCell):
         )
 
     def forward_cell(self, x, h0):
-        o, (h, c) = self.lstm(x, h0)
-        h = h.permute(1, 0, 2).contiguous()
-        return o, h[:, -1]
+        o, c = self.lstm(x, h0)
+        h = c[0].permute(1, 0, 2).contiguous()
+        return o, c, h[:, -1]
 
-    def form_hidden(self, x, h0):
-        h0 = super(LSTMCell, self).form_hidden(x, h0)
-        return (h0, torch.zeros_like(h0))
+    def form_hidden(self, h0):
+        h = super(LSTMCell, self).form_hidden(h0)
+        return (h, torch.zeros_like(h))
 
     def reset_parameters(self, gain=1):
         self.lstm.reset_parameters()
@@ -100,17 +102,17 @@ class BidirectionalLSTMCell(LSTMCell):
             batch_first=True
         )
 
-    def form_hidden(self, x, h0):
-        h0 = super(BidirectionalLSTMCell, self).form_hidden(x, h0)
-        h0 = h0.permute(1, 0, 2).contiguous().view(3, 4, 2).permute(1, 0, 2)
-        return (h0, torch.zeros_like(h0))
+    def form_hidden(self, h0):
+        h = super(BidirectionalLSTMCell, self).form_hidden(h0)
+        h = h.permute(1, 0, 2).contiguous().view(3, 4, 2).permute(1, 0, 2)
+        return (h, torch.zeros_like(h))
 
     def forward_cell(self, x, h0):
-        o, (h, c) = self.lstm(x, h0)
-        h = h.permute(1, 0, 2).contiguous()
+        o, c = self.lstm(x, h0)
+        h = c[0].permute(1, 0, 2).contiguous()
         h = h.view(-1, self.layers, 2, self.hidden_dim // 2)
         h = h[:, -1].view(-1, self.hidden_dim)
-        return o, h
+        return o, c, h
 
 
 class GRUCell(BaseRNNCell):
@@ -133,7 +135,7 @@ class GRUCell(BaseRNNCell):
     def forward_cell(self, x, h0):
         o, h = self.gru(x, h0)
         h = h.permute(1, 0, 2).contiguous()
-        return o, h[:, -1]
+        return o, h, h[:, -1]
 
     def reset_parameters(self, gain=1):
         self.gru.reset_parameters()
@@ -156,16 +158,16 @@ class BidirectionalGRUCell(GRUCell):
             batch_first=True
         )
 
-    def form_hidden(self, x, h0):
-        h0 = super(BidirectionalGRUCell, self).form_hidden(x, h0)
-        return h0.permute(1, 0, 2).contiguous().view(3, 4, 2).permute(1, 0, 2)
+    def form_hidden(self, h0):
+        h = super(BidirectionalGRUCell, self).form_hidden(h0)
+        return h.permute(1, 0, 2).contiguous().view(3, 4, 2).permute(1, 0, 2)
 
     def forward_cell(self, x, h0):
-        o, h = self.gru(x, h0)
-        h = h.permute(1, 0, 2).contiguous()
+        o, c = self.gru(x, h0)
+        h = c.permute(1, 0, 2).contiguous()
         h = h.view(-1, self.layers, 2, self.hidden_dim // 2)
         h = h[:, -1].view(-1, self.hidden_dim)
-        return o, h
+        return o, c, h
 
 
 MODULES = [

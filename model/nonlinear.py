@@ -24,6 +24,7 @@ class FunctionalNonlinear(BaseNonlinear):
         raise NotImplementedError()
 
     def forward_loss(self, x):
+        x = self.invoke(self.linear, x)
         return self.invoke(self.func, x)
 
 

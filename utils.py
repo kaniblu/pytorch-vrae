@@ -5,7 +5,6 @@ import json
 import random
 import logging
 import argparse
-import multiprocessing as mp
 
 import pickle
 import collections
@@ -335,3 +334,19 @@ class UniversalFileReader(object):
             ext = self.default_ext
         reader = map_val(ext, self.extdict, "file type")
         return reader(path)
+
+
+def parse_args(parser):
+    args, unk_args = parser.parse_known_args()
+    if unk_args:
+        logging.warning(f"Some arguments are unrecognized: {unk_args}")
+    return args
+
+
+def initialize_script(parser):
+    args = parse_args(parser)
+    os.makedirs(args.save_dir, exist_ok=True)
+    save_args(parser, args,
+              os.path.join(args.save_dir, args.argparse_filename))
+    config_basic_logger(args)
+    return args

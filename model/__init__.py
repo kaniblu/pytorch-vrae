@@ -7,6 +7,7 @@ from . import manager
 from . import encoder
 from . import decoder
 from . import nonlinear
+from . import embedding
 
 
 def add_arguments(parser):
@@ -60,6 +61,7 @@ class ModelArgumentConstructor(object):
         self.add("kld-scale", parent=key, type=float, default=1.0)
         self.add_encoder_arguments(self.joinargs(key, "encoder"))
         self.add_decoder_arguments(self.joinargs(key, "decoder"))
+        self.add("embed-freeze", parent=key, action="store_true", default=False)
 
     def add_all_arguments(self):
         self.add_nonlinear_argument("nonlinear")
@@ -67,12 +69,15 @@ class ModelArgumentConstructor(object):
 
 
 class ModelBuilder(object):
-    def __init__(self, args, vocab_size):
+    def __init__(self, args, vocab):
         self.args = args
-        self.vocab_size = vocab_size
+        self.vocab = vocab
+        self.vocab_size = len(vocab)
+        self.bos_idx = vocab.f2i.get(args.bos)
+        self.eos_idx = vocab.f2i.get(args.eos)
 
-    def get(self, key):
-        return getattr(self.args, key)
+    def get(self, key, default=None):
+        return getattr(self.args, key, default)
 
     def get_module_cls(self, key, kwargs_map=None, fallback=None):
         if fallback is None:
@@ -115,21 +120,26 @@ class ModelBuilder(object):
         return self.get_module_cls(key, {
             "rnn-decoder": dict(
                 rnn_cls=self.get_rnn_cls(f"{key}_cell")
-            )
+            ),
+            "rnn-recalling-decoder": dict(
+                rnn_cls=self.get_rnn_cls(f"{key}_cell")
+            ),
         })
 
-    def get_embedding_cls(self, key=None):
-        def create(*args, **kwargs):
-            return common.Embedding(*args, padding_idx=self.vocab_size,
-                                    **kwargs)
-        return create
+    def get_embedding_cls(self, key):
+        return lambda *args, **kwargs: embedding.FineTunableEmbedding(
+            *args, **kwargs,
+            allow_padding=True,
+            freeze=self.get(f"{key}_embed_freeze"),
+            unfrozen_idx=[self.bos_idx, self.eos_idx]
+        )
 
     def get_vsae_cls(self, key):
         return self.get_module_cls(key, {
             "variational-sentence-autoencoder": dict(
                 z_dim=self.get(f"{key}_z_dim"),
                 word_dim=self.get(f"{key}_word_dim"),
-                vocab_size=self.vocab_size + 1,
+                vocab_size=self.vocab_size,
                 kld_scale=self.get(f"{key}_kld_scale"),
                 emb_cls=self.get_embedding_cls(key),
                 enc_cls=self.get_encoder_cls(f"{key}_encoder"),
@@ -138,7 +148,7 @@ class ModelBuilder(object):
         })
 
 
-def build_model(args, vocab_size):
-    builder = ModelBuilder(args, vocab_size)
+def build_model(*args, **kwargs):
+    builder = ModelBuilder(*args, **kwargs)
     nonlinear.set_default(builder.get_nonlinear_cls("nonlinear"))
     return builder.get_vsae_cls("vae")()
