@@ -10,4 +10,6 @@ To train, run the following command from the root repository:
     
 To generate, run the following command:
 
-    python -m generate --vocab examples/vocab.pkl -ckpt-path examples/checkpoint-e01 --save-dir examples/
+    python -m generate --vocab examples/vocab.pkl --ckpt-path examples/checkpoint-e01 --save-dir examples/
+    
+For more available options, check out `python -m train --help` and `python -m generate --help`.
