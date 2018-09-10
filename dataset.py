@@ -143,10 +143,3 @@ class TextSequenceBatchCollator(object):
             collate_fn = self.collate_map[dt]
             ret[feat] = collate_fn(items)
         return ret
-
-
-
-# dataset = TextSequenceDataset(r"D:\Downloads\SlotGated-SLU-master\SlotGated-SLU-master\data\atis\train\seq.in.txt", feats=["string", "tensor"])
-# collator = TextSequenceBatchCollator(len(dataset.vocab))
-# dataloader = td.DataLoader(dataset, batch_size=32, collate_fn=collator, shuffle=True)
-# print(next(iter(dataloader))["tensor"][1].size())
